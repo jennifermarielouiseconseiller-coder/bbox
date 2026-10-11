@@ -4,6 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import Login from "@/pages/Login";
 import FirstConnection from "@/pages/FirstConnection";
 import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import FindIdentifier from "@/pages/FindIdentifier";
 import Dashboard from "@/pages/Dashboard";
 import { Toaster } from "sonner";
@@ -17,6 +18,7 @@ function App() {
             <Route path="/" element={<Login />} />
             <Route path="/premiere-connexion" element={<FirstConnection />} />
             <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/retrouver-identifiant" element={<FindIdentifier />} />
             <Route path="/espace-client" element={<Dashboard />} />
           </Routes>
