@@ -494,6 +494,25 @@ async def canal_cancel(payload: CancelInput, user: dict = Depends(get_current_us
     }
 
 
+@api_router.post("/subscription/canal/cancel/undo")
+async def canal_undo(user: dict = Depends(get_current_user)):
+    rec = await db.cancellations.find_one({"user_id": str(user["_id"]), "service": "canal"})
+    if not rec:
+        raise HTTPException(status_code=400, detail="Aucune résiliation en cours.")
+    eff = rec.get("effective_date")
+    try:
+        eff_dt = datetime.strptime(eff, "%d/%m/%Y").replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > eff_dt:
+            raise HTTPException(
+                status_code=400,
+                detail="La résiliation est déjà effective et ne peut plus être annulée.",
+            )
+    except ValueError:
+        pass
+    await db.cancellations.delete_one({"_id": rec["_id"]})
+    return {"message": "Votre résiliation a été annulée. Votre abonnement reste actif."}
+
+
 app.include_router(api_router)
 
 app.add_middleware(

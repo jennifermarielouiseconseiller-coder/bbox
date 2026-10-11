@@ -66,6 +66,23 @@ export default function CanalCancellation() {
 
   const requested = sub?.status === "cancellation_requested";
 
+  const onUndo = async () => {
+    setLoading(true);
+    try {
+      const res = await api.post("/subscription/canal/cancel/undo");
+      toast.success(res.data.message);
+      const updated = await api.get("/subscription/canal");
+      setSub(updated.data);
+      setReason("");
+      setFeedback("");
+      setConfirmChecked(false);
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#eef3f7] font-nunito">
       <header className="bg-white shadow-sm px-5 py-3 flex items-center justify-between">
@@ -150,6 +167,16 @@ export default function CanalCancellation() {
               >
                 Retour à mon espace
               </button>
+              <div className="mt-4">
+                <button
+                  data-testid="undo-cancel"
+                  onClick={onUndo}
+                  disabled={loading}
+                  className="text-[#164194] font-bold underline underline-offset-4 decoration-2 hover:text-[#0f2d66] disabled:opacity-60"
+                >
+                  {loading ? "Annulation..." : "Annuler ma résiliation"}
+                </button>
+              </div>
             </motion.div>
           ) : (
             <div className="bg-white rounded-2xl p-6 shadow-[0_8px_24px_rgba(22,65,148,0.08)]">
