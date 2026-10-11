@@ -7,6 +7,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import FindIdentifier from "@/pages/FindIdentifier";
 import Dashboard from "@/pages/Dashboard";
+import CanalCancellation from "@/pages/CanalCancellation";
 import { Toaster } from "sonner";
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/retrouver-identifiant" element={<FindIdentifier />} />
             <Route path="/espace-client" element={<Dashboard />} />
+            <Route path="/resiliation-canal" element={<CanalCancellation />} />
           </Routes>
         </BrowserRouter>
         <Toaster position="top-center" richColors />

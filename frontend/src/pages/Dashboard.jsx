@@ -72,6 +72,30 @@ export default function Dashboard() {
             </motion.div>
           ))}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="mt-6 bg-white rounded-2xl p-5 shadow-[0_8px_24px_rgba(22,65,148,0.08)] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <div className="shrink-0 w-12 h-12 rounded-xl bg-[#17334d] flex items-center justify-center">
+              <span className="text-white font-extrabold text-sm">C+</span>
+            </div>
+            <div>
+              <h2 className="text-[#17334d] font-bold">Option CANAL+ Ciné Séries</h2>
+              <p className="text-[#5a6b7a] text-sm">24,99 €/mois · abonnement actif</p>
+            </div>
+          </div>
+          <button
+            data-testid="goto-cancel-canal"
+            onClick={() => navigate("/resiliation-canal")}
+            className="rounded-full border-2 border-[#c4521f] text-[#c4521f] font-bold px-6 py-2.5 hover:bg-[#c4521f] hover:text-white transition-colors whitespace-nowrap"
+          >
+            Résilier mon abonnement
+          </button>
+        </motion.div>
       </main>
     </div>
   );

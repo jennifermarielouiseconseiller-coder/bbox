@@ -173,6 +173,34 @@ def build_reset_email_html(reset_url: str) -> str:
     )
 
 
+def build_welcome_email_html() -> str:
+    login_url = f"{FRONTEND_URL}/"
+    return (
+        '<table role="presentation" width="100%" style="background:#eef3f7;padding:24px">'
+        '<tr><td align="center">'
+        '<table role="presentation" width="480" style="background:#ffffff;border-radius:16px;'
+        'font-family:Arial,Helvetica,sans-serif">'
+        '<tr><td style="padding:32px 32px 8px">'
+        f'<p style="font-size:20px;font-weight:bold;color:#164194;margin:0">{escape(EMAIL_FROM_NAME)}</p>'
+        '</td></tr>'
+        '<tr><td style="padding:8px 32px">'
+        '<h1 style="font-size:22px;color:#17334d;margin:0 0 12px">Bienvenue sur votre espace client</h1>'
+        '<p style="font-size:15px;color:#5a6b7a;line-height:1.6;margin:0 0 20px">'
+        'Votre compte a bien été créé. Vous pouvez dès maintenant vous connecter pour gérer '
+        'vos offres, vos factures et vos abonnements.</p>'
+        f'<p style="margin:0 0 24px"><a href="{escape(login_url)}" '
+        'style="background:#c4521f;color:#ffffff;text-decoration:none;font-weight:bold;'
+        'padding:14px 28px;border-radius:999px;display:inline-block;font-size:15px">'
+        'Accéder à mon espace client</a></p>'
+        '<p style="font-size:13px;color:#8a98a6;line-height:1.5;margin:0">'
+        'Nous ne vous demanderons jamais votre mot de passe par e-mail.</p>'
+        '</td></tr>'
+        '<tr><td style="padding:24px 32px;border-top:1px solid #eef3f7">'
+        f'<p style="font-size:12px;color:#8a98a6;margin:0">Envoyé par {escape(EMAIL_FROM_NAME)}.</p>'
+        '</td></tr></table></td></tr></table>'
+    )
+
+
 # ---------- helpers ----------
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -260,6 +288,11 @@ class ResetPasswordInput(BaseModel):
     password: str = Field(..., min_length=6)
 
 
+class CancelInput(BaseModel):
+    reason: str
+    feedback: Optional[str] = ""
+
+
 # ---------- brute force ----------
 async def check_lockout(identifier: str):
     rec = await db.login_attempts.find_one({"identifier": identifier})
@@ -309,6 +342,15 @@ async def register(payload: RegisterInput, response: Response):
     access = create_access_token(str(result.inserted_id), email)
     refresh = create_refresh_token(str(result.inserted_id))
     set_auth_cookies(response, access, refresh)
+    if "@" in email:
+        try:
+            await send_email(
+                to=email,
+                subject="Bienvenue sur votre espace client",
+                html=build_welcome_email_html(),
+            )
+        except HTTPException as e:
+            logger.warning(f"Welcome email not delivered: {e.detail}")
     return {"message": "Compte créé avec succès", "user": public_user(doc)}
 
 
@@ -410,6 +452,46 @@ async def reset_password(payload: ResetPasswordInput):
         {"_id": rec["_id"]}, {"$set": {"used": True}}
     )
     return {"message": "Votre mot de passe a été réinitialisé avec succès."}
+
+
+@api_router.get("/subscription/canal")
+async def canal_status(user: dict = Depends(get_current_user)):
+    rec = await db.cancellations.find_one({"user_id": str(user["_id"]), "service": "canal"})
+    return {
+        "service": "CANAL+",
+        "offer": "CANAL+ Ciné Séries",
+        "price": "24,99 €/mois",
+        "since": "12 mars 2023",
+        "status": "cancellation_requested" if rec else "active",
+        "cancellation": {
+            "reason": rec.get("reason"),
+            "requested_at": rec.get("created_at"),
+            "effective_date": rec.get("effective_date"),
+        } if rec else None,
+    }
+
+
+@api_router.post("/subscription/canal/cancel")
+async def canal_cancel(payload: CancelInput, user: dict = Depends(get_current_user)):
+    existing = await db.cancellations.find_one({"user_id": str(user["_id"]), "service": "canal"})
+    if existing:
+        raise HTTPException(status_code=400, detail="Une demande de résiliation est déjà en cours.")
+    now = datetime.now(timezone.utc)
+    effective = now + timedelta(days=30)
+    await db.cancellations.insert_one({
+        "user_id": str(user["_id"]),
+        "email": user["email"],
+        "service": "canal",
+        "reason": payload.reason,
+        "feedback": payload.feedback or "",
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "effective_date": effective.strftime("%d/%m/%Y"),
+    })
+    return {
+        "message": "Votre demande de résiliation a bien été enregistrée.",
+        "effective_date": effective.strftime("%d/%m/%Y"),
+    }
 
 
 app.include_router(api_router)
