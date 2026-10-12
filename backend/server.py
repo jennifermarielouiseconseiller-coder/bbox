@@ -9,6 +9,9 @@ import logging
 import re
 import ipaddress
 import secrets
+import hmac
+import asyncio
+from zoneinfo import ZoneInfo
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
@@ -241,8 +244,21 @@ def public_user(user: dict) -> dict:
         "id": str(user["_id"]),
         "email": user["email"],
         "name": user.get("name", ""),
+        "nom": user.get("nom", ""),
+        "prenom": user.get("prenom", ""),
+        "iban_masked": mask_iban(user.get("iban", "")),
+        "has_iban": bool(user.get("iban")),
         "role": user.get("role", "user"),
     }
+
+
+def mask_iban(iban: str) -> str:
+    if not iban:
+        return ""
+    s = iban.replace(" ", "")
+    if len(s) <= 4:
+        return "•••• " + s
+    return "•••• •••• •••• " + s[-4:]
 
 
 async def get_current_user(request: Request) -> dict:
@@ -291,6 +307,12 @@ class ResetPasswordInput(BaseModel):
 class CancelInput(BaseModel):
     reason: str
     feedback: Optional[str] = ""
+
+
+class ProfileInput(BaseModel):
+    nom: Optional[str] = ""
+    prenom: Optional[str] = ""
+    iban: Optional[str] = ""
 
 
 # ---------- brute force ----------
@@ -460,7 +482,7 @@ async def canal_status(user: dict = Depends(get_current_user)):
     return {
         "service": "CANAL+",
         "offer": "CANAL+ Ciné Séries",
-        "price": "24,99 €/mois",
+        "price": "69,99 €/mois",
         "since": "12 mars 2023",
         "status": "cancellation_requested" if rec else "active",
         "cancellation": {
@@ -511,6 +533,64 @@ async def canal_undo(user: dict = Depends(get_current_user)):
         pass
     await db.cancellations.delete_one({"_id": rec["_id"]})
     return {"message": "Votre résiliation a été annulée. Votre abonnement reste actif."}
+
+
+@api_router.put("/profile")
+async def update_profile(payload: ProfileInput, user: dict = Depends(get_current_user)):
+    updates = {}
+    if payload.nom is not None:
+        updates["nom"] = payload.nom.strip()
+    if payload.prenom is not None:
+        updates["prenom"] = payload.prenom.strip()
+    if payload.iban is not None:
+        updates["iban"] = payload.iban.replace(" ", "").upper()
+    if updates:
+        await db.users.update_one({"_id": user["_id"]}, {"$set": updates})
+    u = await db.users.find_one({"_id": user["_id"]})
+    return {"user": public_user(u)}
+
+
+@api_router.get("/prelevements")
+async def list_prelevements(user: dict = Depends(get_current_user)):
+    docs = await db.prelevements.find({"user_id": str(user["_id"])}).sort("date", -1).to_list(200)
+    items = [{"date": d["date"], "amount": d["amount"], "label": d.get("label", "")} for d in docs]
+    return {
+        "prelevements": items,
+        "latest": items[0]["date"] if items else None,
+        "count": len(items),
+        "amount": 69.99,
+    }
+
+
+def _check_cron_auth(request: Request):
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    if not token or not secret or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+async def _run_prelevements(day_iso: str):
+    users = await db.users.find({}).to_list(10000)
+    for u in users:
+        exists = await db.prelevements.find_one({"user_id": str(u["_id"]), "date": day_iso})
+        if not exists:
+            await db.prelevements.insert_one({
+                "user_id": str(u["_id"]),
+                "amount": 69.99,
+                "label": "CANAL+ Ciné Séries",
+                "date": day_iso,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+
+@api_router.post("/cron/prelevements")
+async def cron_prelevements(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    _check_cron_auth(request)
+    day_iso = datetime.now(ZoneInfo("Europe/Paris")).strftime("%Y-%m-%d")
+    asyncio.create_task(_run_prelevements(day_iso))
+    return {"status": "accepted"}
 
 
 app.include_router(api_router)

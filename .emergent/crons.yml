@@ -1,0 +1,9 @@
+crons:
+  - name: prelevements-daily
+    description: "Crée automatiquement chaque jour à minuit (Paris) le prélèvement de 69,99€ daté du jour"
+    cron: "0 0 * * *"
+    timezone: "Europe/Paris"
+    endpoint: "{{BASE_URL}}/api/cron/prelevements"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
